@@ -1,0 +1,15 @@
+# Install a PyTorch build appropriate for your accelerator separately.
+diffusers
+easydict
+einops
+ftfy
+imageio
+imageio-ffmpeg
+numpy
+opencv-python
+Pillow
+regex
+scipy
+torchvision
+tqdm
+transformers
