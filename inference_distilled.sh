@@ -18,6 +18,7 @@ torchrun \
   --recent_chunks 2 \
   --sparse_mem_topk 2 \
   --sparse_mem_offload \
+  --vis_ui \
   --seed 42 \
   --save_dir outputs/distilled/ \
   "$@"

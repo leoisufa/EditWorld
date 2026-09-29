@@ -8,7 +8,7 @@ Qianxun Xu<sup>2</sup>, Jiachi Liu<sup>1</sup>, Gang Yu<sup>2†</sup>, Guosheng
 <sup>1</sup>Nanyang Technological University &nbsp;&nbsp; <sup>2</sup>StepFun  
 <sup>*</sup>Project Lead &nbsp;&nbsp; <sup>†</sup>Corresponding Authors
 
-[![Paper](https://img.shields.io/badge/Paper-PDF-b31b1b.svg)](docs/Precise_Editing_and_Flexible_Referencing_for_Interactable_Worlds__arXiv_.pdf)
+[![Paper](https://img.shields.io/badge/Paper-arXiv-b31b1b.svg)](https://arxiv.org/abs/2609.34470)
 [![Demo Video](https://img.shields.io/badge/YouTube-Demo_Video-ff0000.svg?logo=youtube&logoColor=white)](https://www.youtube.com/watch?v=D4W1Eaw36Vs)
 [![Model](https://img.shields.io/badge/Model-Hugging_Face-ffd21e.svg)](https://huggingface.co/leoisufa/EditWorld)
 
@@ -149,8 +149,10 @@ If you find EditWorld useful, please cite our work:
   author  = {Liao, Xinyao and Zeng, Xianfang and Liang, Zhu and Fu, Zhoujie and
              Xu, Qianxun and Liu, Jiachi and Yu, Gang and Lin, Guosheng},
   year    = {2026},
-  note    = {Preprint},
-  url     = {https://github.com/leoisufa/EditWorld}
+  eprint  = {2609.34470},
+  archivePrefix = {arXiv},
+  primaryClass = {cs.CV},
+  url     = {https://arxiv.org/abs/2609.34470}
 }
 ```
 

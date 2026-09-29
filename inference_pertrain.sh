@@ -18,6 +18,7 @@ torchrun \
   --recent_chunks 2 \
   --sparse_mem_topk 2 \
   --sparse_mem_offload \
+  --vis_ui \
   --sampling_steps 70 \
   --shift 10.0 \
   --guide_scale 5.0 \
