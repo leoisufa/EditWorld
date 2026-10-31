@@ -22,6 +22,10 @@ Qianxun Xu<sup>2</sup>, Jiachi Liu<sup>1</sup>, Gang Yu<sup>2†</sup>, Guosheng
   <em><a href="https://www.youtube.com/watch?v=D4W1Eaw36Vs">Click to watch the demo video.</a></em>
 </p>
 
+## News
+
+- Released the model weights and code for 4-step autoregressive inference.
+
 ## Overview
 
 <p align="center">
@@ -35,7 +39,7 @@ editing instructions and reference images during autoregressive generation.
 ## Open-source Plan
 
 - ✅ Multi-step autoregressive inference
-- [ ] Few-step autoregressive model
+- ✅ Few-step autoregressive model
 - [ ] WBench-Editing
 
 ## Installation
@@ -60,25 +64,35 @@ pip install ninja
 git clone https://github.com/Dao-AILab/flash-attention.git
 cd flash-attention
 MAX_JOBS=4 python -m pip install . --no-build-isolation
+cd ..
 
 # Option 2: Install FA3 from source
 pip install ninja
 git clone https://github.com/Dao-AILab/flash-attention.git
 cd flash-attention/hopper
 MAX_JOBS=4 python -m pip install . --no-build-isolation
+cd ../..
 ```
 
 ## Model Weights
 
 Model weights: [leoisufa/EditWorld](https://huggingface.co/leoisufa/EditWorld).
-Place the shared weights under `ckpt/` and the pretrained DiT experts under `ckpt/pretrain/`:
+Place the shared weights under `ckpt/` and the DiT experts in their corresponding subdirectories:
 
 ```text
 ckpt/
 ├── models_t5_umt5-xxl-enc-bf16.pth
 ├── Wan2.1_VAE.pth
 ├── google/umt5-xxl/
-└── pretrain/
+├── pretrain/
+│   ├── low_noise_model/
+│   │   ├── config.json
+│   │   └── diffusion_pytorch_model.safetensors
+│   └── high_noise_model/
+│       ├── config.json
+│       └── diffusion_pytorch_model.safetensors
+└── distilled/
+    ├── inference_config.json
     ├── low_noise_model/
     │   ├── config.json
     │   └── diffusion_pytorch_model.safetensors
@@ -127,17 +141,31 @@ to the JSON file.
 
 ## Run Inference
 
-### Multi-step inference with CFG
+### Pretrain: multi-step inference with CFG
 
 ```bash
-bash inference_pertrain.sh
+bash inference_pretrain.sh
 ```
 
-The script runs on eight GPUs with sequence parallelism (`--sp_size 8`) and multi-step CFG
-(`--sampling_steps 70`, `--guide_scale 5.0`). Its arguments can be overridden on the command line,
-for example `bash inference_pertrain.sh --txt_file /path/to/cases.txt --save_dir /path/to/outputs/`.
+Uses `ckpt/pretrain/` with 70 sampling steps and CFG scale 5.0.
+
+### Distilled: 4-step inference without CFG
+
+```bash
+bash inference_distilled.sh
+```
+
+Uses `ckpt/distilled/` with four deterministic sampling steps and no runtime CFG.
+
+Both scripts run on eight GPUs with sequence parallelism (`--sp_size 8`) and enable
+the WASD and camera-rotation UI. Arguments can be overridden on the command line,
+for example `bash inference_distilled.sh --txt_file /path/to/cases.txt --save_dir /path/to/outputs/`.
 Videos are named by manifest order: `case 1.mp4`, `case 2.mp4`, and so on.
-Run `python inference.py --help` for the complete option list.
+
+```bash
+python inference.py --inference_mode pretrain --help
+python inference.py --inference_mode distilled --help
+```
 
 ## Citation
 

@@ -1,6 +1,57 @@
-.DS_Store
+# Python
 __pycache__/
 *.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+tmp/
+
+# Environments and local configuration
+.venv/
+venv/
+env/
+.env
+.env.*
+!.env.example
+
+# Editors and operating systems
+.DS_Store
+.idea/
+.vscode/
+.claude/
+
+# Build and packaging
+build/
+dist/
+*.egg-info/
+
+# Training and experiment artifacts
 outputs/
+output/
+checkpoints/
+checkpoint-*/
+wandb/
+runs/
+logs/
+*.log
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.bin
 ckpt/*
 !ckpt/.gitkeep
+
+# Unreleased manuscripts and private research notes
+docs/*_arxiv_.pdf
+docs/*draft*.pdf
+
+# Local datasets and generated media
+data/
+datasets/
+*.mp4
+*.avi
+*.mov
+*.npy

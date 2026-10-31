@@ -325,11 +325,8 @@ class WanI2V_AR:
 
         seed = seed if seed >= 0 else random.randint(0, sys.maxsize)
         # One generator shared across all AR chunks. The RNG state therefore
-        # advances continuously chunk-by-chunk: chunk N's initial noise depends
-        # on chunk N-1's sampling draws. This is intentional — it gives each
-        # `seed` a deterministic, end-to-end video; re-seeding per chunk would
-        # produce IID chunk-initial noise but would also make each chunk's
-        # sampling reproducible only in isolation.
+        # advances continuously chunk-by-chunk. Distilled phase transitions
+        # draw no additional noise; only each chunk's initial latent uses it.
         seed_g = torch.Generator(device=self.device)
         seed_g.manual_seed(seed)
 
@@ -452,8 +449,8 @@ class WanI2V_AR:
         # ---- scheduler ----
         with torch.amp.autocast("cuda", dtype=self.param_dtype):
             # ---- AR chunk loop ----
-            # Seed-less running latent stream: starts empty (or with the GT
-            # prefix) and grows one generated chunk at a time. Decode is deferred
+            # Seed-less running latent stream starts empty and grows one
+            # generated chunk at a time. Decode is deferred
             # to a single VAE call on the whole [chunk_0 .. chunk_{N-1}] stream.
             # Frame 0 is chunk 0's first frame; its image content is injected only
             # through cond_y (mask=1 at frame 0), not as a separate seed latent.
@@ -462,7 +459,7 @@ class WanI2V_AR:
             # ---- KV-cache AR generation (chunk-by-chunk streaming) ----
             # History lives in a persistent per-layer self-attn KV cache: each
             # chunk is denoised attending to the committed clean KVs of all prior
-            # chunks, then its own clean x0 KV is committed at t=0. Cross-attn text
+            # chunks, then its own clean x0 KV is committed at t=0.
             # Text K,V are cached per chunk and reused across sampling steps.
             m0 = self.low_noise_model
             num_layers = len(m0.blocks)
@@ -726,14 +723,9 @@ class WanI2V_AR:
                         kv_cache=e["kv_cond"], crossattn_cache=e["cc"],
                         ref_kv=e["ref_cond"][ref_id] if attend_ref else None, **common)[0]
                     if distilled:
-                        sigma_next = pcm_sigmas[step_idx + 1]
-                        step_noise = (
-                            torch.randn(latent.shape, dtype=latent.dtype,
-                                        device=latent.device, generator=seed_g)
-                            if float(sigma_next) > 0 else torch.zeros_like(latent)
-                        )
                         latent = pcm_step(
-                            latent, noise_pred_cond, pcm_sigmas[step_idx], sigma_next, step_noise,
+                            latent, noise_pred_cond,
+                            pcm_sigmas[step_idx], pcm_sigmas[step_idx + 1],
                         )
                     else:
                         noise_pred_uncond = e["model"](

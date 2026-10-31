@@ -6,6 +6,8 @@ from pathlib import Path
 
 
 def validate_phase_sigmas(values, boundary: float) -> tuple[float, ...]:
+    if not isinstance(values, (list, tuple)):
+        raise ValueError("phase_sigmas must be a list of five numeric values")
     try:
         sigmas = tuple(float(value) for value in values)
     except (TypeError, ValueError) as exc:
@@ -25,10 +27,11 @@ def load_phase_sigmas(checkpoint_dir: Path, boundary: float) -> tuple[float, ...
     path = checkpoint_dir / "inference_config.json"
     with path.open("r", encoding="utf-8") as handle:
         config = json.load(handle)
+    if not isinstance(config, dict) or "phase_sigmas" not in config:
+        raise ValueError(f"{path} must contain phase_sigmas")
     return validate_phase_sigmas(config["phase_sigmas"], boundary)
 
 
-def pcm_step(state, velocity, sigma, sigma_next, noise):
-    """Predict a clean latent, then re-noise at the next phase endpoint."""
-    clean = state.float() - float(sigma) * velocity.float()
-    return ((1.0 - float(sigma_next)) * clean + float(sigma_next) * noise.float()).to(state.dtype)
+def pcm_step(state, velocity, sigma, sigma_next):
+    """Deterministic flow-map transition between checkpoint phase endpoints."""
+    return (state.float() + (float(sigma_next) - float(sigma)) * velocity.float()).to(state.dtype)

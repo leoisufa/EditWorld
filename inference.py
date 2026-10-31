@@ -12,11 +12,11 @@ multi-event ``navigation/editing_N`` annotation contract and per-chunk labels:
       },
       "editing_annotation": {
         "0": {"state": "navigation"},
-        "1": {"state": "navigation"},
-        "4": {"state": "editing_1", "reference_image": "../ref/example.png"},
-        "7": {"state": "navigation"},
-        "8": {"state": "editing_2"},
-        "11": {"state": "navigation"}
+        "1": {"state": "editing_1", "reference_image": "../ref/example.png"},
+        "2": {"state": "editing_1", "reference_image": "../ref/example.png"},
+        "3": {"state": "navigation"},
+        "4": {"state": "editing_2"},
+        "5": {"state": "navigation"}
       }
     }
 
@@ -32,6 +32,7 @@ do not attend to a reference image.
 
 import argparse
 import json
+import math
 import os
 import re
 from pathlib import Path
@@ -70,6 +71,8 @@ def validate_checkpoint_dir(checkpoint_dir: Path, mode: str) -> None:
         f"{mode}/high_noise_model/config.json",
         f"{mode}/high_noise_model/diffusion_pytorch_model.safetensors",
     )
+    if mode == "distilled":
+        required_files += ("distilled/inference_config.json",)
     missing = [name for name in required_files if not (checkpoint_dir / name).is_file()]
     if not (checkpoint_dir / "google" / "umt5-xxl").is_dir():
         missing.append("google/umt5-xxl/")
@@ -309,6 +312,8 @@ def parse_txt_file(txt_file_path: str):
                     "json_path": json_path,
                 }
             )
+    if not samples:
+        raise ValueError(f"Manifest contains no inference cases: {txt_path}")
     return samples
 
 
@@ -316,18 +321,18 @@ def setup_distributed(sp_size: int):
     rank = int(os.environ.get("RANK", "0"))
     world_size = int(os.environ.get("WORLD_SIZE", "1"))
     local_rank = int(os.environ.get("LOCAL_RANK", "0"))
-
-    torch.cuda.set_device(local_rank)
-
-    if world_size > 1 and not dist.is_initialized():
-        dist.init_process_group(backend="nccl")
-
+    if sp_size < 1:
+        raise ValueError("sp_size must be positive")
     if sp_size > world_size:
         raise ValueError(f"sp_size ({sp_size}) cannot exceed world_size ({world_size})")
     if world_size % sp_size != 0:
         raise ValueError(
             f"world_size ({world_size}) must be divisible by sp_size ({sp_size})"
         )
+
+    torch.cuda.set_device(local_rank)
+    if world_size > 1 and not dist.is_initialized():
+        dist.init_process_group(backend="nccl")
 
     initialize_parallel_state(sp=sp_size, dp_replicate=max(world_size // sp_size, 1))
     return rank, world_size, local_rank
@@ -346,7 +351,7 @@ def build_pipeline(args, rank: int, local_rank: int):
         control_type=args.control_type,
         device_id=local_rank,
         rank=rank,
-        t5_fsdp=enable_fsdp,
+        t5_fsdp=enable_fsdp and not args.t5_cpu,
         dit_fsdp=enable_fsdp,
         t5_cpu=args.t5_cpu,
         latent_window_size=args.latent_window_size,
@@ -380,7 +385,8 @@ def main():
     parser.add_argument("--inference_mode", choices=["pretrain", "distilled"],
                         default="pretrain")
     parser.add_argument("--control_type", type=str, choices=["cam", "act"], required=True)
-    parser.add_argument("--size", type=str, default="480*832")
+    parser.add_argument("--size", type=str, choices=SUPPORTED_SIZES["i2v-A14B"],
+                        default="480*832")
     parser.add_argument(
         "--checkpoint_root",
         type=str,
@@ -424,6 +430,20 @@ def main():
     )
     args = parser.parse_args()
 
+    if args.sp_size < 1 or args.latent_window_size < 1:
+        parser.error("--sp_size and --latent_window_size must be positive")
+    if args.sink_chunks < 0 or args.sparse_mem_topk < 0:
+        parser.error("--sink_chunks and --sparse_mem_topk must be non-negative")
+    if args.sparse_mem_topk > 0 and args.recent_chunks <= 0:
+        parser.error("sparse memory requires --recent_chunks > 0")
+    if not distilled:
+        if args.sampling_steps is not None and args.sampling_steps < 1:
+            parser.error("--sampling_steps must be positive")
+        if args.shift is not None and (not math.isfinite(args.shift) or args.shift <= 0):
+            parser.error("--shift must be finite and positive")
+        if args.guide_scale is not None and not math.isfinite(args.guide_scale):
+            parser.error("--guide_scale must be finite")
+
     checkpoint_dir = Path(args.checkpoint_root)
     validate_checkpoint_dir(checkpoint_dir, mode)
     config = WAN_CONFIGS["i2v-A14B"]
@@ -431,10 +451,6 @@ def main():
     if distilled:
         from wan.utils.pcm_inference import load_phase_sigmas
         pcm_phase_sigmas = load_phase_sigmas(checkpoint_dir / mode, float(config.boundary))
-    rank, world_size, local_rank = setup_distributed(args.sp_size)
-
-    pipeline = build_pipeline(args, rank, local_rank)
-
     target_size = SIZE_CONFIGS[args.size]
     # Fail-fast: H/W must divide by (vae_spatial_stride * patch) so VAE latents,
     # patchify, and the plucker (h c1)/(w c2) folding all divide cleanly (else it
@@ -451,6 +467,8 @@ def main():
     guide_scale = None if distilled else (args.guide_scale if args.guide_scale is not None else config.sample_guide_scale)
 
     all_cases = parse_txt_file(args.txt_file)
+    rank, world_size, local_rank = setup_distributed(args.sp_size)
+    pipeline = build_pipeline(args, rank, local_rank)
     save_dir = Path(args.save_dir)
 
     if rank == 0 and args.txt_file:
